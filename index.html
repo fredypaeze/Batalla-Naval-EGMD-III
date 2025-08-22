@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Batalla Naval – Áreas del Departamento (10x10)</title>
+    <style>
+        :root {
+            --bg: #0b1220;
+            --panel: #0f1a33;
+            --accent: #2dd4bf;
+            --accent-2: #60a5fa;
+            --muted: #93a4c0;
+            --modal-bg: rgba(3, 6, 17, 0.7);
+            --card: #0c162b;
+            --radius: 18px;
+            --shadow: 0 10px 30px rgba(0, 0, 0, .4);
+            --cell: 44px;
+            --label: 36px;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        /* Intro: overlay a pantalla completa */
+        .intro-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 120;
+            /* por encima de todo */
+            display: none;
+            /* se muestra por JS */
+            place-items: center;
+            background: rgba(0, 0, 0, .90);
+        }
+
+        /* Contenedor de la slide (sin bordes, para “cine”) */
+        .intro-card {
+            width: 100vw;
+            height: 100vh;
+            display: grid;
+            place-items: center;
+            /* ¡Esta es la clave! */
+            grid-template-rows: 1fr auto;
+            background: #050b18;
+        }
+
+        /* Imagen centrada y responsiva */
+        .intro-card img {
+            width: 75%;
+            height: 100%;
+            object-fit: contain;
+            /* respeta proporciones, sin recortar */
+            display: block;
+        }
+
+        /* Botonera inferior derecha */
+        .intro-actions {
+            display: flex;
+            justify-content: flex-end;
+            padding: 16px 22px;
+            background: linear-gradient(180deg, transparent, rgba(0, 0, 0, .35));
+        }
+
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            background: var(--bg);
+            color: #eaf2ff;
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif
+        }
+
+        .stage {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            padding: 1.5vh;
+        }
+
+        .frame {
+            height: min(95vh, 1000px);
+            width: min(97vw, 1600px);
+            aspect-ratio: auto;
+            background: linear-gradient(180deg, #0d1730, #0a1326);
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, .05);
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            background: rgba(255, 255, 255, .02);
+            border-bottom: 1px solid rgba(255, 255, 255, .06)
+        }
+
+        header h1 {
+            font-size: 1.1rem;
+            margin: 0;
+            letter-spacing: .3px
+        }
+
+        header .sub {
+            color: var(--muted);
+            font-size: .85rem
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 14px;
+            padding: 14px;
+            height: 100%
+        }
+
+        .board {
+            background: var(--panel);
+            border-radius: var(--radius);
+            padding: 16px;
+            display: grid;
+            gap: 12px;
+            align-content: center;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .03);
+            overflow: auto;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: var(--label) repeat(10, var(--cell));
+            grid-template-rows: var(--label) repeat(10, var(--cell));
+            gap: 8px;
+            justify-content: center;
+            align-content: center;
+        }
+
+        .glabel {
+            display: grid;
+            place-items: center;
+            font-weight: 700;
+            font-size: .85rem;
+            letter-spacing: .4px;
+            color: #cfe7ff;
+            background: rgba(255, 255, 255, .04);
+            border: 1px solid rgba(255, 255, 255, .06);
+            border-radius: 10px;
+            user-select: none;
+            padding: 2px 4px;
+        }
+
+        .glabel.corner {
+            background: transparent;
+            border: 0
+        }
+
+        .cell {
+            width: var(--cell);
+            height: var(--cell);
+            border-radius: 10px;
+            background: linear-gradient(180deg, #0f1b38, #0b152b);
+            border: 1px solid rgba(20, 149, 155, 0.524);
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: transform .12s ease, background .2s ease, border-color .2s ease, outline-color .2s ease;
+            user-select: none;
+        }
+
+        .cell:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, .18)
+        }
+
+        .cell.visited {
+            background: linear-gradient(180deg, #0c152d, #0a1226);
+            border-color: rgba(255, 255, 255, .1)
+        }
+
+        .cell .marker {
+            position: absolute;
+            bottom: 6px;
+            right: 6px;
+            font-size: .95rem;
+            opacity: .9
+        }
+
+        .cell.visited.hit {
+            outline: 2px solid rgba(22, 163, 74, .8);
+        }
+
+        .cell.visited.miss {
+            outline: 2px solid rgba(239, 68, 68, .85);
+        }
+
+        .side {
+            background: var(--panel);
+            border-radius: var(--radius);
+            padding: 14px;
+            display: grid;
+            grid-auto-rows: min-content;
+            gap: 12px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .03);
+        }
+
+        .metric {
+            display: grid;
+            gap: 8px
+        }
+
+        .progress {
+            height: 10px;
+            background: #0b1222;
+            border-radius: 999px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, .06)
+        }
+
+        .progress>span {
+            display: block;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent), var(--accent-2));
+            transition: width .35s ease
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(96, 165, 250, .12);
+            border: 1px solid rgba(96, 165, 250, .25);
+            font-size: .8rem
+        }
+
+        .list {
+            display: grid;
+            gap: 6px
+        }
+
+        .row {
+            display: flex;
+            gap: 8px
+        }
+
+        button.reset {
+            all: unset;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            background: #0a1428;
+            transition: background .2s ease;
+            font-weight: 600;
+            font-size: .9rem;
+        }
+
+        button.reset:hover {
+            background: #0d1933
+        }
+
+        footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-top: 1px solid rgba(255, 255, 255, .06);
+            color: var(--muted);
+            font-size: .85rem
+        }
+
+        /* Modal contenido */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: var(--modal-bg);
+            display: none;
+            place-items: center;
+            padding: 24px;
+            z-index: 60
+        }
+
+        .modal {
+            width: min(960px, 92vw);
+            background: var(--card);
+            border-radius: 22px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255, 255, 255, .08);
+            overflow: hidden
+        }
+
+        .modal header {
+            border: 0;
+            background: linear-gradient(180deg, rgba(45, 212, 191, .14), rgba(96, 165, 250, .10));
+            padding: 16px 20px
+        }
+
+        .modal header h2 {
+            margin: 0;
+            font-size: 1.1rem
+        }
+
+        .modal .body {
+            padding: 18px 20px;
+            display: grid;
+            gap: 14px;
+            line-height: 1.6;
+            place-items: center;
+            text-align: center;
+        }
+
+        .modal .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px
+        }
+
+        .tag {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #0b1731;
+            border: 1px solid rgba(255, 255, 255, .08);
+            font-size: .8rem;
+            color: #cfe7ff
+        }
+
+        .modal .actions {
+            padding: 14px 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            background: rgba(255, 255, 255, .02);
+            border-top: 1px solid rgba(255, 255, 255, .06)
+        }
+
+        .btn {
+            all: unset;
+            cursor: pointer;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #0f1c39, #0b1428);
+            border: 1px solid rgba(255, 255, 255, .12);
+            font-weight: 600
+        }
+
+        .btn.primary {
+            background: linear-gradient(90deg, var(--accent), var(--accent-2));
+            color: #051022;
+            border: 0
+        }
+
+        #btnPrev,
+        #btnNext {
+            display: none;
+        }
+
+        /* Pantalla resultado previa */
+        .result-backdrop {
+            position: fixed;
+            inset: 0;
+            display: none;
+            place-items: center;
+            background: rgba(0, 0, 0, .55);
+            z-index: 70
+        }
+
+        .result-card {
+            min-width: 280px;
+            max-width: 85vw;
+            text-align: center;
+            border-radius: 18px;
+            padding: 22px 26px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            box-shadow: var(--shadow);
+        }
+
+        .result-card.hit {
+            background: rgba(34, 197, 94, .18);
+        }
+
+        .result-card.miss {
+            background: rgba(239, 68, 68, .18);
+        }
+
+        .result-title {
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin: 0 0 6px
+        }
+
+        .result-sub {
+            color: #cfe7ff;
+            font-size: .95rem
+        }
+
+        /* Final */
+        .final-backdrop {
+            position: fixed;
+            inset: 0;
+            display: none;
+            place-items: center;
+            background: rgba(0, 0, 0, .85);
+            z-index: 100;
+            color: white;
+        }
+
+        .final-card {
+            text-align: center;
+            padding: 40px 50px;
+            border-radius: 20px;
+            background: linear-gradient(180deg, #0f1c39, #0b1428);
+            box-shadow: 0 0 30px rgba(0, 0, 0, .6);
+            border: 2px solid var(--accent-2);
+        }
+
+        .final-card h1 {
+            font-size: 2.5rem;
+            margin: 0 0 12px;
+            color: var(--accent);
+        }
+
+        .final-card p {
+            font-size: 1.2rem;
+            margin: 0;
+            color: #cfe7ff;
+        }
+
+        /* === Showcase de FLOTA === */
+        .flota-backdrop {
+            position: fixed;
+            inset: 0;
+            display: none;
+            place-items: center;
+            background: rgba(0, 0, 0, .7);
+            z-index: 75;
+        }
+
+        .flota-card {
+            width: min(1100px, 96vw);
+            min-height: min(72vh, 720px);
+            background: linear-gradient(180deg, #0d1730, #0a1326);
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 22px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 1.3fr 0.9fr;
+        }
+
+        .flota-left {
+            position: relative;
+            background: #071126;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+        }
+
+        .flota-left img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: .9;
+            filter: contrast(1.05) saturate(1.05);
+        }
+
+        .flota-banner {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            background: linear-gradient(90deg, #0a1326, #102347);
+            color: #fff;
+            /* texto claro */
+            font-size: 30px;
+            font-weight: 900;
+            padding: 10px 16px;
+            border-radius: 12px;
+            text-align: center;
+            letter-spacing: .4px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+        }
+
+        .flota-right {
+            padding: 18px;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: 12px;
+            background: rgba(255, 255, 255, .02);
+            min-height: 0;
+            justify-items: center;
+        }
+
+        .crew-title {
+            font-weight: 800;
+            font-size: 1.05rem;
+            text-align: center;
+        }
+
+        .crew-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            grid-auto-rows: 150px;
+            gap: 14px;
+            width: 100%;
+            max-width: 520px;
+            place-content: center;
+            justify-items: center;
+            align-items: center;
+            padding: 4px 8px;
+            overflow: auto;
+        }
+
+        .crew-item {
+            width: 110px;
+            height: 150px;
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            justify-items: center;
+            gap: 8px;
+            text-align: center;
+            color: #dfe9ff;
+        }
+
+        .crew-avatar {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, .2);
+            overflow: hidden;
+            display: grid;
+            place-items: center;
+            background: #0b1731;
+            font-weight: 800;
+            letter-spacing: .3px;
+        }
+
+        .crew-avatar img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+        }
+
+        .crew-name {
+            max-width: 100%;
+            font-size: .82rem;
+            font-weight: 700;
+            line-height: 1.1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .crew-role {
+            font-size: .72rem;
+            line-height: 1.1;
+            opacity: .75;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .flota-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .btn.ghost {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, .25);
+        }
+
+        /* === Showcase Misión (80% imagen arriba, 20% texto abajo) === */
+        .mision-backdrop {
+            position: fixed;
+            inset: 0;
+            display: none;
+            place-items: center;
+            background: rgba(0, 0, 0, .7);
+            z-index: 80;
+        }
+
+        .mision-card {
+            width: min(1000px, 95vw);
+            /* **ELIMINA ESTA LÍNEA** para que la altura sea flexible */
+            /* height: min(80vh, 750px); */
+            background: #0d1730;
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, .5);
+            display: grid;
+            /* La suma de las franjas se adaptará */
+            /*grid-template-rows: auto 4fr 1fr auto;*/
+            grid-template-rows: auto 1fr auto;
+            /* ⬅️ 3 filas */
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, .12);
+        }
+
+        .mision-card.has-desc {
+            grid-template-rows: auto 1fr auto auto;
+            /* añade la fila de descripción */
+        }
+
+        .mision-banner {
+            text-align: center;
+            font-weight: 900;
+            letter-spacing: .3px;
+            padding: 12px 16px;
+            /*background: linear-gradient(90deg, var(--accent), var(--accent-2));*/
+            background: linear-gradient(90deg, rgba(45, 212, 191, 0.4), rgba(96, 165, 250, 0.4));
+            color: #ffffff;
+            font-size: 30px;
+            /* Aquí agrandas la fuente. Puedes cambiar el valor según tu necesidad */
+        }
+
+        .mision-image {
+            /* Define una altura máxima para evitar que el contenido visual sea demasiado grande */
+            max-height: 400px;
+            /* Ajusta este valor si lo necesitas */
+        }
+
+        .mision-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* descripción centrada */
+        .mision-desc {
+            display: none;
+            /* oculto por defecto; lo mostramos solo en especiales */
+            padding: 14px 18px;
+            background: rgba(255, 255, 255, .04);
+            overflow: auto;
+            text-align: center;
+            /* ⬅️ centra el texto */
+            max-width: 800px;
+            /* ⬅️ opcional: limita ancho para mejor lectura */
+            margin: 0 auto;
+            /* ⬅️ centra el bloque */
+            line-height: 1.4;
+        }
+
+        /* cuando es especial, se muestra */
+        .mision-card.has-desc .mision-desc {
+            display: block;
+        }
+
+        /*.mision-desc {
+            padding: 14px 18px;
+            font-size: .95rem;
+            color: #dfe9ff;
+            background: rgba(255, 255, 255, .04);
+            overflow: auto;
+        }*/
+
+        .mision-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, .02);
+            border-top: 1px solid rgba(255, 255, 255, .06);
+        }
+
+        /* === QR 15/70/15 === */
+        .qr-card {
+            width: min(900px, 95vw);
+            height: clamp(520px, 85dvh, 720px);
+            /* ⬅️ límite vertical */
+            background: #0d1730;
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, .5);
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr) auto auto;
+            /* ⬅️ imagen crece/encoge */
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, .12);
+        }
+
+        .qr-banner {
+            display: grid;
+            place-items: center;
+            font-weight: 900;
+            letter-spacing: .3px;
+            background: linear-gradient(90deg, rgba(45, 212, 191, 0.4), rgba(96, 165, 250, 0.4));
+            color: #ffffff;
+            font-size: 26px;
+            padding: 8px 16px;
+            text-align: center;
+
+
+        }
+
+        .qr-image img {
+            width: 100%;
+            height: 100%;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            /* ⬅️ nunca se desborda */
+            display: block;
+        }
+
+
+        .qr-image img {
+            max-width: 95%;
+            max-height: 95%;
+            object-fit: contain;
+        }
+
+        .qr-desc {
+            display: grid;
+            place-items: center;
+            padding: 10px 16px;
+            text-align: center;
+            font-size: 1rem;
+            color: #dfe9ff;
+            background: rgba(255, 255, 255, .04);
+        }
+    </style>
+</head>
+
+<!-- INTRO (diapositivas a pantalla completa) -->
+<div class="intro-backdrop" id="introBackdrop" aria-hidden="true">
+    <div class="intro-card">
+        <img id="introImg" alt="Diapositiva de introducción">
+        <div class="intro-actions">
+            <button class="btn primary" id="introNext">Continuar</button>
+        </div>
+    </div>
+</div>
+
+<body>
+    <div class="stage">
+        <div class="frame" role="application" aria-label="Batalla naval didáctica, tablero 10 por 10">
+            <header>
+                <div>
+                    <h1>Batalla Naval – Áreas del Departamento</h1>
+                    <div class="sub">Haz clic en cada casilla. Verás primero el resultado (<strong>IMPACTO!</strong> o
+                        <strong>¡Falló!</strong>) y, si corresponde, el detalle.
+                    </div>
+                </div>
+                <div class="row"><button class="reset" id="btnReset" title="Reiniciar tablero">Reiniciar</button></div>
+            </header>
+
+            <div class="content">
+                <section class="board" aria-live="polite">
+                    <div class="grid" id="grid" aria-label="Cuadrícula 10 por 10 con encabezados externos"></div>
+                </section>
+
+                <aside class="side">
+                    <div class="metric">
+                        <div class="pill">Progreso del tablero</div>
+                        <div class="progress"><span id="bar"></span></div>
+                        <div id="progressText" class="sub">0 / 100 descubiertas</div>
+                    </div>
+                    <div class="metric">
+                        <div class="pill">Resumen</div>
+                        <div class="list" id="summary">
+                            <div>Impactos (flotas + misiones): <strong id="hits">0</strong>/10</div>
+                            <div>Falló (vacías): <strong id="misses">0</strong></div>
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <div class="pill">Leyenda</div>
+                        <div class="list">
+                            <div>🟩 Verde: <strong>IMPACTO!</strong> (Flota o Misión con información)</div>
+                            <div>🟥 Rojo: <strong>Falló!</strong> (Casilla vacía)</div>
+                            <div>✔️ Casilla visitada</div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+
+            <footer>
+                <span>Tablero 10×10 • HTML/CSS/JS</span>
+                <span id="status" class="sub">Listo para jugar</span>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Modal de contenido -->
+    <div class="modal-backdrop" id="backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="modal" role="document">
+            <header>
+                <h2 id="modalTitle">Título</h2>
+            </header>
+            <div class="body">
+                <div id="modalDesc">Descripción</div>
+                <div class="tags" id="modalTags"></div>
+                <div id="modalHint" class="sub" style="opacity:.9;"></div>
+            </div>
+            <div class="actions">
+                <button class="btn primary" id="btnClose" title="Cerrar">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de resultado (previa) -->
+    <div class="result-backdrop" id="resultBackdrop" aria-hidden="true">
+        <div class="result-card" id="resultCard">
+            <div class="result-title" id="resultTitle">IMPACTO!</div>
+            <div class="result-sub" id="resultSub">Se abrirá el detalle…</div>
+        </div>
+    </div>
+
+    <!-- Pantalla final -->
+    <div class="final-backdrop" id="finalBackdrop">
+        <div class="final-card">
+            <h1>¡MISIÓN CUMPLIDA!</h1>
+            <p>La flota de <strong>Estrategia de Gobierno y Monitoreo del Dato</strong><br />ha navegado todas sus
+                misiones con éxito.<br /><br />Gracias por acompañarnos en este recorrido.<br />¡Ahora continuamos con
+                el resto de la travesía!</p>
+        </div>
+    </div>
+
+    <!-- Showcase de FLOTA -->
+    <div class="flota-backdrop" id="flotaBackdrop" aria-hidden="true">
+        <div class="flota-card">
+            <div class="flota-left">
+                <img id="flotaCover" alt="Barco de la flota">
+                <div class="flota-banner" id="flotaBanner">Flota X: Nombre</div>
+            </div>
+            <div class="flota-right">
+                <div class="crew-title">Tripulación</div>
+                <div class="crew-grid" id="crewGrid"></div>
+                <div class="flota-actions">
+                    <button class="btn ghost" id="btnFlotaSkip" title="Saltar">Saltar</button>
+                    <button class="btn primary" id="btnFlotaContinue" title="Continuar">Continuar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MISIÓN / ESPECIALES (80/20) -->
+    <div class="mision-backdrop" id="misionBackdrop" aria-hidden="true">
+        <div class="mision-card">
+            <div class="mision-banner" id="misionBanner">Título</div>
+            <div class="mision-image"><img id="misionImg" src="" alt="Diapositiva / imagen"></div>
+            <!--<div class="mision-desc" id="misionDesc">Texto</div>-->
+            <div class="mision-desc" id="misionDesc"></div>
+            <div class="mision-actions">
+                <button class="btn ghost" id="btnMisionSkip" title="Saltar">Saltar</button>
+                <button class="btn primary" id="btnMisionContinue" title="Continuar">Continuar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR 15/70/15 -->
+    <div class="mision-backdrop" id="qrBackdrop" aria-hidden="true">
+        <div class="qr-card">
+            <div class="qr-banner" id="qrBanner">Tarea de la Flota</div>
+            <div class="qr-image"><img id="qrImg" src="" alt="QR Kahoot/Menti"></div>
+            <div class="qr-desc" id="qrDesc">Ingresa al QR y ayuda con la misión de la Flota.</div>
+
+            <!-- 🔹 ESTA PARTE ASEGURA EL BOTÓN DE CONTINUAR -->
+            <div class="mision-actions">
+                <a class="btn ghost" id="btnQrOpen" target="_blank" rel="noopener noreferrer">Abrir enlace</a>
+                <button class="btn primary" id="btnQrClose">Continuar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ===== Datos base ===== */
+        const ROWS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+        const COLS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+
+        // Orden del recorrido
+        const SCRIPTED_ORDER = [
+            'MISS','MISS','FLOTA1', 'MISS','FLOTA2', 'FLOTA3', 'MISS','FLOTA4', 'MISS', 'FLOTA5', 'MISS',
+            'MISS','MISION1', 'MISION2', 'MISS','MISION3', 'MISS','MISS','MISION4','MISS','MISS','MISS',
+            'MAPA', 'CAPITAN'
+
+        ];
+
+        /* ===== Flotas / Misiones / Especiales ===== */
+        const FLOTAS = {
+            FLOTA1: {
+                type: 'flota', area: 'Planificación de la Información', title: 'Flota 1: Planificación de la Información',
+                desc: '“Cuando la información tiene rumbo, la gestión tiene impacto.” ​',
+                cover: 'https://images.unsplash.com/photo-1691045243893-090cb94b940c?q=80&w=1600&auto=format&fit=crop',
+                crew: [
+                    { name: 'Johanna Salinas', role: 'Experta', photo: 'assets/img/fotos/foto_johannasalinas.png' },
+                    { name: 'Camilo Linares', role: 'Experto', photo: 'assets/img/fotos/foto_camilolinares.png' },
+
+                ],
+                qrImg: 'assets/img/qr_images/qr_planificacion.png',
+                /*qrLink: 'https://kahoot.it/', // pon el enlace real*/
+                qrTop: 'Tarea de la Flota 1: Planificación de la Información',
+                qrHint: 'Ingresa al QR y ayuda con la misión de la Flota.',
+                flotaHint: 'Definir, organizar y priorizar los procesos de gestión de la información estadística y geográfica del sector minero-energético, de modo que se convierta en el insumo fundamental y línea base sobre la cual el equipo de datos del GTICS planea, organiza y orienta su trabajo estratégico.​',
+                tags: ['Oferta/Demanda', 'Diagnósticos', 'Plan Estadístico', 'Mapas de información']
+            },
+            FLOTA2: {
+                type: 'flota', area: 'Analítica de Datos  e Infraestructura de Datos Estadísticos​', title: 'Flota 2: Analítica de Datos  e Infraestructura de Datos Estadísticos​',
+                desc: '“Calidad de datos, claridad en las decisiones”  ​',
+                cover: 'https://images.unsplash.com/photo-1698677671150-d9506d2eb8b9?q=80&w=1600&auto=format&fit=crop',
+                crew: [
+                    { name: 'Francisco Maya', role: 'Experto', photo: 'assets/img/fotos/foto_franciscomaya.png' },
+                    { name: 'Estefany Luna', role: 'Experto', photo: 'assets/img/fotos/foto_estefanyluna.png' },
+                    { name: 'José Montaña', role: 'Experto', photo: 'assets/img/fotos/foto_josemontana.png' },
+                    { name: 'Christian Sánchez', role: 'Experto', photo: 'assets/img/fotos/foto_christiansanchez.png' },
+                    { name: 'Andrés Mariño', role: 'Experto', photo: 'assets/img/fotos/foto_andresmarino.png' },
+                    { name: 'Osiris Saldaña', role: 'Experto', photo: 'assets/img/fotos/foto_osirissaldana.png' },
+                    { name: 'Nickolay Jimenéz', role: 'Experto', photo: 'assets/img/fotos/foto_nickolayjimenez.png' },
+                    { name: 'Didier Satizabal', role: 'Experto', photo: 'assets/img/fotos/foto_didiersatizabal.png' },
+                    { name: 'Julián Madrid', role: 'Experto', photo: 'assets/img/fotos/foto_julianmadrid.png' }
+                ],
+                qrImg: 'assets/img/qr_images/qr_analitica.png',
+                /*qrLink: 'https://kahoot.it/', // pon el enlace real*/
+                qrTop: 'Tarea de la Flota 2: Analítica de Datos  e Infraestructura de Datos Estadísticos​',
+                qrHint: 'Ingresa al QR y ayuda con la misión de la Flota.',
+                flotaHint: 'Coordinar la recopilación, integración, análisis y difusión de información cualitativa y cuantitativa, asegurando su calidad y disponibilidad para la gestión estratégica del sector.',
+                tags: ['Interoperabilidad', 'Calidad', 'Data Warehouse', 'BI', 'ML/Big Data']
+            },
+            FLOTA3: {
+                type: 'flota', area: 'Infraestructura de Datos Espaciales', title: 'Flota 3: Infraestructura de Datos Espaciales',
+                desc: '“Conectando territorios, decisiones y datos: el poder de una IDE bien estructurada.” ​​',
+                cover: 'https://images.unsplash.com/photo-1712823715723-1f64db0f4c90?q=80&w=1600&auto=format&fit=crop',
+                crew: [
+                    { name: 'Luis Romero', role: 'Experto', photo: 'assets/img/fotos/foto_luisromero.png' },
+                    { name: 'Javier Blanco', role: 'Experto', photo: 'assets/img/fotos/foto_javierblanco.png' },
+                    { name: 'Jairo Polanco', role: 'Experto', photo: 'assets/img/fotos/foto_jairopolanco.png' }
+                ],
+                qrImg: 'assets/img/qr_images/qr_despaciales.png',
+                /*qrLink: 'https://kahoot.it/', // pon el enlace real*/
+                qrTop: 'Tarea de la Flota 3: Infraestructura de Datos Espaciales',
+                qrHint: 'Ingresa al QR y ayuda con la misión de la Flota.',
+                flotaHint: 'Consolidar la infraestructura de datos espaciales integrada a la bodega sectorial, garantizando información geográfica estandarizada y de calidad para la planeación y toma de decisiones del sector minero-energético.',
+                tags: ['SI Geográfico', 'SACD']
+            },
+            FLOTA4: {
+                type: 'flota', area: 'Estudios Estratégicos', title: 'Flota 4: Estudios Estratégicos',
+                desc: '“Decisiones que transforman: estudios estratégicos basados en analítica de datos para una gestión pública inteligente.”​',
+                cover: 'https://images.unsplash.com/photo-1729896972398-c39c4313eada?q=80&w=1600&auto=format&fit=crop',
+                crew: [
+                    { name: 'Valentina Uribe', role: 'Experto', photo: 'assets/img/fotos/foto_valentinauribe.png' },
+                    { name: 'Fredy Paez', role: 'Experto', photo: 'assets/img/fotos/foto_fredypaez.png' },
+
+                ],
+                qrImg: 'assets/img/qr_images/qr_eestrategicos.png',
+                /*qrLink: 'https://kahoot.it/', // pon el enlace real*/
+                qrTop: 'Tarea de la Flota 4: Estudios Estratégicos',
+                qrHint: 'Ingresa al QR y ayuda con la misión de la Flota.',
+                flotaHint: 'Realizar investigaciones y análisis temáticos que apoyen la construcción de conocimiento, la intervención de las dinámicas de fenómenos asociados con exploración y explotación de hidrocarburos, minas y energía, la toma de decisiones informada y la formulación de las políticas públicas.​',
+                tags: ['Metodologías', 'Evaluaciones de impacto']
+            },
+            FLOTA5: {
+                type: 'flota', area: 'Planificación de la Información',
+                title: 'Flota 5: Planificación de la Información',
+                desc: '“Cuando la información tiene rumbo, la gestión tiene impacto.”',
+                cover: 'https://images.unsplash.com/photo-1691045243893-090cb94b940c?q=80&w=1600&auto=format&fit=crop',
+                crew: [
+                    { name: 'Eliana Chacón', role: 'Experto', photo: 'assets/img/fotos/foto_elianachacon.png' },
+                    { name: 'María Carolina Bermúdez', role: 'Experto', photo: 'assets/img/fotos/foto_mariabermudez.png' },
+                    { name: 'Nelson Mateus', role: 'Experto', photo: 'assets/img/fotos/foto_nelsonmateus.png' },
+                    { name: 'Daniel Casas', role: 'Experto', photo: 'assets/img/fotos/foto_danielcasas.png' },
+                    { name: 'Diego Quiroga', role: 'Experto', photo: 'assets/img/fotos/foto_diegoquiroga.png' }
+                ],
+                qrImg: 'assets/img/qr_images/qr_planificacion.png',
+                /*qrLink: 'https://kahoot.it/', // pon el enlace real*/
+                qrTop: 'Tarea de la Flota 5: Uso y Apropiación de TI',
+                qrHint: 'Ingresa al QR y ayuda con la misión de la Flota.',
+                flotaHint: 'Definir, organizar y priorizar los procesos de gestión de la información estadística y geográfica del sector minero-energético, de modo que se convierta en el insumo fundamental y línea base sobre la cual el equipo de datos del GTICS planea, organiza y orienta su trabajo estratégico.​​',
+                tags: ['Uso cotidiano', 'Apropiación digital', 'Habilidades', 'Transformación cultural']
+            },
+        };
+
+        const MISIONES = {
+            MISION1: {
+                type: 'mision', title: 'Misión 1 – Políticas',
+                /*desc: '¿Cómo logramos que la tecnología sea parte del día a día y que todos la hagan propia?',*/
+                cover: 'assets/img/slides/slide_mision_1.png',
+                /*extra: '“Las tecnologías no transforman por sí solas: su poder nace cuando las personas las entienden, las usan y las hacen propias.”',*/
+                tags: ['Kahoot: pregunta asociada a Flota 1']
+            },
+            MISION2: {
+                type: 'mision', title: 'Misión 2 – Servicios',
+                /*desc: 'Pregunta asociada a Flota 2.',*/
+                cover: 'assets/img/slides/slide_mision_2.png'/*, extra: 'Texto de apoyo.', tags: ['Kahoot']*/
+            },
+            MISION3: {
+                type: 'mision', title: 'Misión 3 – Gestión del Conocimiento e Innovación',
+                /*desc: 'Pregunta asociada a Flota 3.',*/
+                cover: 'assets/img/slides/slide_mision_3.png'/*, extra: 'Texto de apoyo.', tags: ['Kahoot']*/
+            },
+            MISION4: {
+                type: 'mision', title: 'Misión 4 – Infraestructura',
+                /*desc: 'Pregunta asociada a Flota 4.',*/
+                cover: 'assets/img/slides/slide_mision_4.png'/*, extra: 'Texto de apoyo.', tags: ['Kahoot']*/
+            }
+        };
+
+        const ESPECIALES = {
+            MAPA: {
+                type: 'special', title: 'Mapa de Objetivos',
+                cover: 'assets/img/slides/slide_mapa.png',
+                extra: 'Este mapa resume la travesía: conexiones, dependencias y próximos hitos.'
+            },
+            CAPITAN: {
+                type: 'special', title: 'Mensaje del Capitán',
+                cover: 'assets/img/fotos/foto_jorgecap.png', // deja vacío si no quieres imagen
+                extra: '"Transformamos datos en conocimiento  para tomar decisiones, mejorar la prestación de servicios al ciudadano y promover el ejercicio del control social"'
+            }
+        };
+
+        /* ===== Estado / elementos ===== */
+        const gridEl = document.getElementById('grid');
+        const hitsEl = document.getElementById('hits');
+        const missesEl = document.getElementById('misses');
+        const progressBar = document.getElementById('bar');
+        const progressText = document.getElementById('progressText');
+        const statusEl = document.getElementById('status');
+
+        const backdrop = document.getElementById('backdrop');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDesc = document.getElementById('modalDesc');
+        const modalTags = document.getElementById('modalTags');
+        const modalHint = document.getElementById('modalHint');
+        const btnClose = document.getElementById('btnClose');
+        const btnReset = document.getElementById('btnReset');
+
+        const resultBackdrop = document.getElementById('resultBackdrop');
+        const resultCard = document.getElementById('resultCard');
+        const resultTitle = document.getElementById('resultTitle');
+        const resultSub = document.getElementById('resultSub');
+
+        const finalBackdrop = document.getElementById('finalBackdrop');
+
+        const flotaBackdrop = document.getElementById('flotaBackdrop');
+        const flotaCover = document.getElementById('flotaCover');
+        const flotaBanner = document.getElementById('flotaBanner');
+        const crewGrid = document.getElementById('crewGrid');
+        const btnFlotaContinue = document.getElementById('btnFlotaContinue');
+        const btnFlotaSkip = document.getElementById('btnFlotaSkip');
+
+        // Misión / Especiales
+        const misionBackdrop = document.getElementById('misionBackdrop');
+        const misionImg = document.getElementById('misionImg');
+        const misionBanner = document.getElementById('misionBanner');
+        /*const misionDesc = document.getElementById('misionDesc');*/
+        const btnMisionContinue = document.getElementById('btnMisionContinue');
+        const btnMisionSkip = document.getElementById('btnMisionSkip');
+
+        /*Texto Mapa y Capitan*/
+        const misionCard = document.querySelector('#misionBackdrop .mision-card');
+        const misionDesc = document.getElementById('misionDesc');
+
+        openMisionShowcase
+        // QR
+        const qrBackdrop = document.getElementById('qrBackdrop');
+        const qrBanner = document.getElementById('qrBanner');
+        const qrImgEl = document.getElementById('qrImg');
+        const qrDescEl = document.getElementById('qrDesc');
+        const btnQrOpen = document.getElementById('btnQrOpen');
+        const btnQrClose = document.getElementById('btnQrClose');
+
+        const LS_KEY = 'bn-10x10-scripted-v2';
+
+        const assignments = {};
+        let linearVisited = [];
+        let state = { visited: new Set(), current: null, hits: 0, misses: 0, scriptIndex: 0 };
+        const shownFlotaShowcase = new Set();
+
+        /* ===== Tablero ===== */
+        function buildBoard() {
+            gridEl.innerHTML = '';
+
+            const corner = document.createElement('div');
+            corner.className = 'glabel corner';
+            gridEl.appendChild(corner);
+
+            COLS.forEach(c => {
+                const th = document.createElement('div');
+                th.className = 'glabel top';
+                th.textContent = c;
+                th.setAttribute('aria-hidden', 'true');
+                gridEl.appendChild(th);
+            });
+
+            ROWS.forEach(r => {
+                const rh = document.createElement('div');
+                rh.className = 'glabel left';
+                rh.textContent = r;
+                rh.setAttribute('aria-hidden', 'true');
+                gridEl.appendChild(rh);
+
+                COLS.forEach(c => {
+                    const id = `${r}${c}`;
+                    const btn = document.createElement('button');
+                    btn.className = 'cell';
+                    btn.setAttribute('data-id', id);
+                    btn.setAttribute('aria-label', `Casilla ${id}`);
+                    btn.innerHTML = `<span class="marker" aria-hidden="true"></span>`;
+                    btn.addEventListener('click', () => onCellClick(id));
+                    gridEl.appendChild(btn);
+                });
+            });
+
+            restoreState();
+            updateHUD();
+        }
+
+        /* ===== Click + orden arreglado ===== */
+        function onCellClick(id) {
+            if (state.visited.has(id)) {
+                const a = assignments[id];
+                if (a && a.kind === 'hit') {
+                    state.current = id;
+                    const info = getInfoFromAssignment(a);
+                    openModal(info, id);
+                }
+                return;
+            }
+
+            const script = SCRIPTED_ORDER[state.scriptIndex] || 'MISS';
+            let outcome = { kind: 'miss' };
+
+            if (FLOTAS[script]) outcome = { kind: 'hit', key: script };
+            else if (MISIONES[script]) outcome = { kind: 'hit', key: script };
+            else if (ESPECIALES[script]) outcome = { kind: 'hit', key: script };
+            else outcome = { kind: 'miss' };
+
+            assignments[id] = outcome;
+            state.scriptIndex = Math.min(state.scriptIndex + 1, SCRIPTED_ORDER.length);
+
+            showResultScreen(outcome, () => {
+                markVisited(id, outcome);
+                if (outcome.kind !== 'hit') return;
+
+                state.current = id;
+
+                if (FLOTAS[outcome.key]) {
+                    const flota = FLOTAS[outcome.key];
+                    // 1) Flota (barco + tripulación)
+                    openFlotaShowcase(flota, () => {
+                        // 2) QR (si hay)
+                        if (flota.qrImg) {
+                            openFlotaQRShowcase(flota, () => {
+                                // 3) Ficha de flota (modal personalizado)
+                                openFlotaFicha(flota, () => { /* volver al tablero */ });
+                            });
+                        } else {
+                            openFlotaFicha(flota, () => { });
+                        }
+                    });
+
+                } else if (MISIONES[outcome.key]) {
+                    const mision = MISIONES[outcome.key];
+                    openMisionShowcase(mision); /*() => openModal(mision));*/
+
+                } else if (ESPECIALES[outcome.key]) {
+                    if (outcome.key === 'CAPITAN') {
+                        openSpecialShowcase(ESPECIALES.CAPITAN, () => { showFinalScreen(); });
+                    } else {
+                        openSpecialShowcase(ESPECIALES[outcome.key], () => { });
+                    }
+                }
+            });
+        }
+
+        function getInfoFromAssignment(a) {
+            if (a.kind !== 'hit') return null;
+            if (FLOTAS[a.key]) return FLOTAS[a.key];
+            if (MISIONES[a.key]) return MISIONES[a.key];
+            if (ESPECIALES[a.key]) return ESPECIALES[a.key];
+            return null;
+        }
+
+        /* ===== Resultado previo ===== */
+        function showResultScreen(outcome, onDone) {
+            const isHit = outcome.kind === 'hit';
+            resultCard.classList.remove('hit', 'miss');
+            resultCard.classList.add(isHit ? 'hit' : 'miss');
+            resultTitle.textContent = isHit ? '¡IMPACTO!' : '¡FALLÓ!';
+            resultSub.textContent = isHit ? 'Abriendo bitácora del capitán…' : 'Sigue intentando.';
+            resultBackdrop.style.display = 'grid';
+            resultBackdrop.setAttribute('aria-hidden', 'false');
+
+            setTimeout(() => {
+                resultBackdrop.style.display = 'none';
+                resultBackdrop.setAttribute('aria-hidden', 'true');
+                onDone && onDone();
+            }, 850);
+        }
+
+        /* ===== Modal genérico (ficha flota / misión corta) ===== */
+        function openModal(info) {
+            if (!info) return;
+
+            modalTags.innerHTML = '';
+            (info.tags || []).forEach(t => {
+                const tag = document.createElement('span');
+                tag.className = 'tag';
+                tag.textContent = t;
+                modalTags.appendChild(tag);
+            });
+
+            if (info.type === 'flota') {
+                modalTitle.textContent = info.title;
+                modalDesc.textContent = info.desc || '';
+                modalHint.textContent = info.flotaHint || '';
+            } else if (info.type === 'mision') {
+                modalTitle.textContent = info.title || 'Misión';
+                modalDesc.textContent = info.desc || '';
+                modalHint.textContent = 'Vamos a Kahoot para completar la misión. Al finalizar, regresa y presiona “Cerrar”.';
+            } else {
+                modalTitle.textContent = info.title || '';
+                modalDesc.textContent = info.extra || '';
+                modalHint.textContent = '';
+            }
+
+            backdrop.style.display = 'grid';
+            backdrop.setAttribute('aria-hidden', 'false');
+            setTimeout(() => { btnClose.focus(); }, 0);
+        }
+
+        function closeModal() {
+            backdrop.style.display = 'none';
+            backdrop.setAttribute('aria-hidden', 'true');
+            state.current = null;
+        }
+
+        /* ===== FLOTA: Barco + tripulación ===== */
+        function openFlotaShowcase(flotaInfo, onContinue) {
+            flotaCover.src = flotaInfo.cover || '';
+            flotaCover.alt = `Barco – ${flotaInfo.area || ''}`;
+            flotaBanner.textContent = flotaInfo.title || 'Flota';
+
+            crewGrid.innerHTML = '';
+            (flotaInfo.crew || []).forEach(member => {
+                const item = document.createElement('div'); item.className = 'crew-item';
+                const av = document.createElement('div'); av.className = 'crew-avatar';
+                if (member.photo) { const img = document.createElement('img'); img.src = member.photo; img.alt = member.name || 'Tripulante'; av.appendChild(img); }
+                else { const initials = (member.name || 'T').split(/\s+/).map(w => w[0]?.toUpperCase() || '').slice(0, 2).join(''); av.textContent = initials || 'T'; }
+                const nameEl = document.createElement('div'); nameEl.className = 'crew-name'; nameEl.textContent = member.name || 'Tripulante';
+                const roleEl = document.createElement('div'); roleEl.className = 'crew-role'; roleEl.textContent = member.role || '';
+                item.appendChild(av); item.appendChild(nameEl); item.appendChild(roleEl);
+                crewGrid.appendChild(item);
+            });
+
+            flotaBackdrop.style.display = 'grid';
+            flotaBackdrop.setAttribute('aria-hidden', 'false');
+
+            const cont = () => {
+                flotaBackdrop.style.display = 'none';
+                flotaBackdrop.setAttribute('aria-hidden', 'true');
+                onContinue && onContinue();
+            };
+            btnFlotaContinue.onclick = cont;
+            btnFlotaSkip.onclick = cont;
+        }
+
+        /* ===== FLOTA: QR 15/70/15 ===== */
+        function openFlotaQRShowcase(flotaInfo, onContinue) {
+            qrBanner.textContent = flotaInfo.qrTop || `Tarea de la ${flotaInfo.title || 'Flota'}`;
+            qrImgEl.src = flotaInfo.qrImg || '';
+            qrDescEl.textContent = flotaInfo.qrHint || 'Ingresa al QR y ayuda con la misión de la Flota.';
+            if (flotaInfo.qrLink) { btnQrOpen.style.display = 'inline-flex'; btnQrOpen.href = flotaInfo.qrLink; }
+            else { btnQrOpen.style.display = 'none'; }
+
+            qrBackdrop.style.display = 'grid';
+            qrBackdrop.setAttribute('aria-hidden', 'false');
+
+            const close = () => {
+                qrBackdrop.style.display = 'none';
+                qrBackdrop.setAttribute('aria-hidden', 'true');
+                onContinue && onContinue();   // ⬅️ vuelve al flujo normal
+            };
+            btnQrClose.onclick = close;   // ⬅️ botón CONTINUAR funciona aquí
+        }
+
+        /* ===== FLOTA: Ficha personalizada (usa modal genérico) ===== */
+        function openFlotaFicha(flotaInfo, onClose) {
+            modalTags.innerHTML = '';
+            (flotaInfo.tags || []).forEach(t => {
+                const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = t; modalTags.appendChild(tag);
+            });
+            modalTitle.textContent = flotaInfo.title;
+            modalDesc.textContent = flotaInfo.desc || '';
+            modalHint.textContent = flotaInfo.flotaHint || '';
+            backdrop.style.display = 'grid'; backdrop.setAttribute('aria-hidden', 'false');
+            btnClose.onclick = () => { closeModal(); onClose && onClose(); };
+        }
+
+        /* ===== MISIÓN 80/20 ===== */
+        function openMisionShowcase(misionInfo) {
+            // Contenido
+            misionBanner.textContent = misionInfo.title || 'Misión';
+            if (misionInfo.cover) {
+                misionImg.src = misionInfo.cover;
+                misionImg.style.display = 'block';
+            } else {
+                misionImg.removeAttribute('src');
+                misionImg.style.display = 'none';
+            }
+            /*misionDesc.textContent = misionInfo.extra || misionInfo.desc || 'Explicación pendiente.';*/
+
+            // 👉 sin descripción en misiones
+            misionCard.classList.remove('has-desc');
+            misionDesc.style.display = 'none';
+            misionDesc.textContent = '';
+
+            // UI: un solo botón "Cerrar"
+            btnMisionContinue.textContent = 'Cerrar';
+            btnMisionSkip.style.display = 'none';
+
+            // Abrimos
+            misionBackdrop.style.display = 'grid';
+            misionBackdrop.setAttribute('aria-hidden', 'false');
+
+            // Cerrar (volver al tablero)
+            const close = () => {
+                misionBackdrop.style.display = 'none';
+                misionBackdrop.setAttribute('aria-hidden', 'true');
+            };
+            btnMisionContinue.onclick = close;
+
+            // También cerrar con clic fuera o Escape (opcional y cómodo)
+            misionBackdrop.onclick = (e) => { if (e.target === misionBackdrop) close(); };
+            document.addEventListener('keydown', function onKey(e) {
+                if (misionBackdrop.style.display === 'grid' && e.key === 'Escape') {
+                    close();
+                    document.removeEventListener('keydown', onKey);
+                }
+            });
+        }
+
+
+        /* ===== ESPECIALES (Mapa / Capitán) ===== */
+        function openSpecialShowcase(info, onContinue) {
+            misionBanner.textContent = info.title || '';
+            if (info.cover) { misionImg.src = info.cover; misionImg.style.display = 'block'; }
+            else { misionImg.removeAttribute('src'); misionImg.style.display = 'none'; }
+
+            // 👉 SÍ hay descripción en especiales
+            misionCard.classList.add('has-desc');
+            misionDesc.textContent = info.extra || '';
+            misionDesc.style.display = 'block';
+
+            /*misionDesc.textContent = info.extra || '';*/
+            misionBackdrop.style.display = 'grid';
+            misionBackdrop.setAttribute('aria-hidden', 'false');
+
+            const close = () => {
+                misionBackdrop.style.display = 'none';
+                misionBackdrop.setAttribute('aria-hidden', 'true');
+                onContinue && onContinue();
+            };
+            btnMisionContinue.onclick = close;
+            btnMisionSkip.onclick = close;
+        }
+
+        /* ===== Final ===== */
+        function showFinalScreen() { document.getElementById('finalBackdrop').style.display = 'grid'; }
+
+        /* ===== Marcar visita y HUD ===== */
+        function markVisited(id, outcome) {
+            if (state.visited.has(id)) return;
+            state.visited.add(id);
+            linearVisited.push(id);
+
+            const cellEl = gridEl.querySelector(`[data-id="${id}"]`);
+            if (cellEl) {
+                cellEl.classList.add('visited');
+                const marker = cellEl.querySelector('.marker');
+
+                if (outcome.kind === 'hit') {
+                    const info = getInfoFromAssignment(outcome);
+                    cellEl.classList.add('hit');
+                    marker.textContent = (info && info.type === 'flota') ? '🚢 ✔️' : '🎯 ✔️';
+                    marker.setAttribute('title', 'IMPACTO!');
+                    state.hits++;
+                } else {
+                    cellEl.classList.add('miss');
+                    marker.textContent = '✖️';
+                    marker.setAttribute('title', 'Falló!');
+                    state.misses++;
+                }
+            }
+            updateHUD();
+            persistState();
+        }
+
+        function updateHUD() {
+            const total = state.visited.size;
+            if (hitsEl) hitsEl.textContent = state.hits;
+            if (missesEl) missesEl.textContent = state.misses;
+            if (progressBar) progressBar.style.width = `${(total / 100) * 100}%`;
+            if (progressText) progressText.textContent = `${total} / 100 descubiertas`;
+            if (statusEl) statusEl.textContent = total === 100 ? 'Completado' : (total > 0 ? 'En progreso' : 'Listo para jugar');
+        }
+
+        function persistState() {
+            try {
+                const data = { a: assignments, v: [...state.visited], lv: linearVisited, h: state.hits, m: state.misses, si: state.scriptIndex, sf: [...shownFlotaShowcase] };
+                localStorage.setItem(LS_KEY, JSON.stringify(data));
+            } catch (e) { }
+        }
+        function restoreState() {
+            try {
+                const raw = localStorage.getItem(LS_KEY);
+                if (!raw) return;
+                const data = JSON.parse(raw);
+                Object.assign(assignments, data.a || {});
+                linearVisited = data.lv || [];
+                state.visited = new Set(data.v || []);
+                state.hits = data.h || 0;
+                state.misses = data.m || 0;
+                state.scriptIndex = data.si || 0;
+                (data.sf || []).forEach(k => shownFlotaShowcase.add(k));
+
+                state.visited.forEach(id => {
+                    const a = assignments[id] || { kind: 'miss' };
+                    const cellEl = gridEl.querySelector(`[data-id="${id}"]`);
+                    if (cellEl) {
+                        cellEl.classList.add('visited', a.kind === 'hit' ? 'hit' : 'miss');
+                        const marker = cellEl.querySelector('.marker');
+                        if (a.kind === 'hit') {
+                            const info = getInfoFromAssignment(a);
+                            marker.textContent = (info && info.type === 'flota') ? '🚢 ✔️' : '🎯 ✔️';
+                            marker.setAttribute('title', 'IMPACTO!');
+                        } else {
+                            marker.textContent = '✖️';
+                            marker.setAttribute('title', 'Falló!');
+                        }
+                    }
+                });
+            } catch (e) { }
+        }
+
+        /* ===== Tamaño de celdas ===== */
+        function readCSSVar(name, fallback) {
+            const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+            const n = parseFloat(v);
+            return Number.isFinite(n) ? n : fallback;
+        }
+        function resizeGrid() {
+            const frame = document.querySelector('.frame');
+            const header = frame.querySelector('header');
+            const footer = frame.querySelector('footer');
+            const contentPadY = 28;
+
+            const frameH = frame.clientHeight;
+            const availH = frameH - header.offsetHeight - footer.offsetHeight - contentPadY;
+
+            const board = document.querySelector('.board');
+            const grid = document.getElementById('grid');
+
+            const boardStyles = getComputedStyle(board);
+            const boardPadX = parseFloat(boardStyles.paddingLeft) + parseFloat(boardStyles.paddingRight);
+            const boardW = board.clientWidth - boardPadX;
+
+            const gridStyles = getComputedStyle(grid);
+            const gap = parseFloat(gridStyles.gap) || 8;
+
+            const label = readCSSVar('--label', 36);
+            const cols = COLS.length, rows = ROWS.length;
+
+            const cellByW = Math.floor((boardW - label - gap * cols) / cols);
+            const cellByH = Math.floor((availH - label - gap * rows) / rows);
+
+            const cell = Math.max(28, Math.min(cellByW, cellByH));
+            document.documentElement.style.setProperty('--cell', cell + 'px');
+        }
+        window.addEventListener('resize', resizeGrid);
+        window.addEventListener('orientationchange', resizeGrid);
+
+        /* ===== Eventos ===== */
+        document.getElementById('btnClose').addEventListener('click', closeModal);
+        document.getElementById('backdrop').addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
+        document.addEventListener('keydown', (e) => { if (backdrop.style.display === 'grid' && e.key === 'Escape') closeModal(); });
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            localStorage.removeItem(LS_KEY);
+            for (const k in assignments) delete assignments[k];
+            linearVisited = [];
+            state = { visited: new Set(), current: null, hits: 0, misses: 0, scriptIndex: 0 };
+            shownFlotaShowcase.clear();
+            buildBoard(); resizeGrid();
+        });
+
+        /* Init */
+        buildBoard();
+        resizeGrid();
+
+
+        /* === Intro: data de diapositivas === */
+        const INTRO_SLIDES = [
+            { src: 'assets/img/slides/slide_inicio.png', alt: 'Inicio' },
+            { src: 'assets/img/slides/slide_tablero.png', alt: 'Tablero' },
+            { src: 'assets/img/slides/slide_bienvenida.png', alt: 'Bienvenida' },
+            { src: 'assets/img/slides/slide_play.png', alt: 'Play' },
+        ];
+
+
+        const introBackdrop = document.getElementById('introBackdrop');
+        const introImg = document.getElementById('introImg');
+        const introNext = document.getElementById('introNext');
+
+        let introIndex = 0;
+        function openIntro() {
+            introIndex = 0;
+            setIntroSlide(introIndex);
+            introBackdrop.style.display = 'grid';
+            introBackdrop.setAttribute('aria-hidden', 'false');
+        }
+        function setIntroSlide(i) {
+            const s = INTRO_SLIDES[i];
+            introImg.src = s.src;
+            introImg.alt = s.alt || 'Diapositiva';
+        }
+        function closeIntro() {
+            introBackdrop.style.display = 'none';
+            introBackdrop.setAttribute('aria-hidden', 'true');
+        }
+
+        /* avanzar con botón o con teclado */
+        introNext.onclick = () => {
+            if (introIndex < INTRO_SLIDES.length - 1) {
+                introIndex++;
+                setIntroSlide(introIndex);
+            } else {
+                closeIntro();               // al terminar, arrancamos el juego
+            }
+        };
+        document.addEventListener('keydown', (e) => {
+            if (introBackdrop.style.display === 'grid') {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') {
+                    introNext.click();
+                } else if (e.key === 'Escape') {
+                    closeIntro();
+                }
+            }
+        });
+
+        /* === Arranque === */
+        // Opción A: mostrar intro y luego construir tablero
+        openIntro();
+        buildBoard();
+        resizeGrid();
+
+        // Opción B: si prefieres, construir primero y luego mostrar intro (es overlay y tapa todo)
+        // buildBoard(); resizeGrid(); openIntro();
+
+    </script>
+</body>
+
+</html>
